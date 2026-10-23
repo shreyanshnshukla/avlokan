@@ -32,7 +32,7 @@ def synthetic_stack(
 
     for i, t in enumerate(times):
         years = (t - times[0]).days / 365.25
-        seasonal = 0.85 + 0.15 * np.cos(2 * np.pi * (t.dayofyear - 290) / 365.25)  # peak ~mid-Oct
+        seasonal = 0.85 + 0.15 * np.cos(2 * np.pi * (t.day_of_year - 290) / 365.25)  # peak ~mid-Oct
         r = base_radius_px * seasonal * (1 - shrink_per_year) ** years
         water = dist < r
 

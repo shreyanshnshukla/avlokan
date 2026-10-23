@@ -75,7 +75,7 @@ def test_area_accuracy_on_clear_scene():
     size, r0 = 120, 35.0
     yy, xx = np.mgrid[:size, :size]
     t = stack.time.to_index()[0]
-    seasonal = 0.85 + 0.15 * np.cos(2 * np.pi * (t.dayofyear - 290) / 365.25)
+    seasonal = 0.85 + 0.15 * np.cos(2 * np.pi * (t.day_of_year - 290) / 365.25)
     true_px = (np.hypot(yy - size / 2, xx - size / 2) < r0 * seasonal).sum()
     assert ts["water_ha"].iloc[0] == pytest.approx(true_px / 100, rel=0.02)
 
