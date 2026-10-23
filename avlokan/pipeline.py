@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from .analysis.timeseries import scene_water, trend_ha_per_year, water_timeseries, yearly_summary
+from .analysis.timeseries import scene_water, summary_trends, water_timeseries, yearly_summary
 from .config import AOI
 from .viz.plots import plot_before_after, plot_composition, plot_timeseries
 
@@ -77,12 +77,7 @@ def run_from_stack(
         "scenes_outliers_removed": int(ts["outlier"].sum()),
         "first_date": str(ts["date"].min().date()) if len(ts) else None,
         "last_date": str(ts["date"].max().date()) if len(ts) else None,
-        "trends_per_year": {
-            "open_water_post_monsoon_ha": _round(trend_ha_per_year(summary, "post_monsoon_peak_ha")),
-            "open_water_pre_monsoon_ha": _round(trend_ha_per_year(summary, "pre_monsoon_low_ha")),
-            "lake_extent_post_monsoon_ha": _round(trend_ha_per_year(summary, "post_monsoon_extent_ha")),
-            "vegetated_share_post_monsoon": _round(trend_ha_per_year(summary, "post_monsoon_vegetated_share"), 4),
-        },
+        "trends_per_year": summary_trends(summary),
         "before_after_dates": [str(d.date()) for d in pair] if pair else None,
     }
     (out / "report.json").write_text(json.dumps(report, indent=2))

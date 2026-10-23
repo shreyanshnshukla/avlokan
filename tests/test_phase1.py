@@ -193,3 +193,18 @@ def test_lake_method_never_counts_weeds_as_water():
 def test_lake_method_needs_boundary():
     with pytest.raises(ValueError):
         water_timeseries(synthetic_stack(start="2019-10-01", end="2019-10-20"), method="lake")
+
+
+def test_summary_uses_water_inside_lake_not_whole_box():
+    from avlokan.analysis.timeseries import summary_trends
+    rows = []
+    for y in (2019, 2020, 2021):
+        for d in ("10-05", "10-25", "11-15"):
+            box = 120.0 if y == 2019 else 60.0        # 2019: waterlogged fields around the lake
+            rows.append({"date": pd.Timestamp(f"{y}-{d}"), "water_ha": box, "open_water_ha": 50.0,
+                         "vegetated_ha": 30.0, "bare_ha": 7.0, "lake_extent_ha": 80.0,
+                         "usable": True, "season": "post_monsoon", "year": y})
+    s = yearly_summary(pd.DataFrame(rows))
+    assert (s["post_monsoon_median_open_ha"] == 50).all()
+    assert s.loc[2019, "box_post_monsoon_peak_ha"] == 120
+    assert summary_trends(s)["open_water_post_monsoon_ha"] == 0.0     # no fake decline from the fields

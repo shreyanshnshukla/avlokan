@@ -207,32 +207,53 @@ def water_timeseries(
 
 
 def yearly_summary(ts: pd.DataFrame) -> pd.DataFrame:
-    """Per year, from usable dates only:
+    """Per year, from usable dates only, measured *inside the lake boundary*
+    (so ponds and waterlogged fields elsewhere in the box don't count):
 
-    - post-monsoon peak of open water and of lake extent (water + vegetation)
-    - pre-monsoon low of open water (extent isn't used pre-monsoon: grass on
-      the dry bed looks like weeds)
-    - post-monsoon median share of the lake covered by vegetation (weeds)
+    - post_monsoon_median_open_ha: typical open water after the monsoon
+      (median: robust; the max is kept too, but one odd date can set it)
+    - pre_monsoon_low_ha: lowest open water before the monsoon
+    - post_monsoon_extent_median_ha: typical water + vegetation after the
+      monsoon. The max nearly always fills the whole boundary, so the
+      median is the one that can show real loss.
+    - post_monsoon_vegetated_share: median share of that extent that is
+      vegetation (floating weeds, but also natural marsh plants)
+    - box_post_monsoon_peak_ha: open water in the whole box, for reference
 
     A lake whose *extent* keeps falling is shrinking. A lake whose open water
-    falls while extent holds is getting weedier, which is a different problem.
+    falls while extent holds is getting more vegetated, a different problem.
     """
     ok = ts[ts["usable"]]
-    pm = ok[ok["season"] == "post_monsoon"].groupby("year")
-    pre = ok[ok["season"] == "pre_monsoon"].groupby("year")
+    col = "open_water_ha" if "open_water_ha" in ok and ok["open_water_ha"].notna().any() else "water_ha"
     okpm = ok[ok["season"] == "post_monsoon"]
+    pm = okpm.groupby("year")
+    pre = ok[ok["season"] == "pre_monsoon"].groupby("year")
     with np.errstate(divide="ignore", invalid="ignore"):
         veg_share = (okpm["vegetated_ha"] / okpm["lake_extent_ha"]).where(okpm["lake_extent_ha"] > 0)
     parts = [
-        pm["water_ha"].max().rename("post_monsoon_peak_ha"),
-        pre["water_ha"].min().rename("pre_monsoon_low_ha"),
-        pm["lake_extent_ha"].max().rename("post_monsoon_extent_ha"),
+        pm[col].median().rename("post_monsoon_median_open_ha"),
+        pm[col].max().rename("post_monsoon_peak_ha"),
+        pre[col].min().rename("pre_monsoon_low_ha"),
+        pm["lake_extent_ha"].median().rename("post_monsoon_extent_median_ha"),
+        pm["lake_extent_ha"].max().rename("post_monsoon_extent_max_ha"),
         veg_share.groupby(okpm["year"]).median().round(3).rename("post_monsoon_vegetated_share"),
+        pm["water_ha"].max().rename("box_post_monsoon_peak_ha"),
         ok.groupby("year").size().rename("usable_scenes"),
     ]
-    out = pd.concat(parts, axis=1).sort_index()
+    out = pd.concat(parts, axis=1).sort_index().round(2)
     out.index.name = "year"
     return out
+
+
+def summary_trends(summary: pd.DataFrame) -> dict:
+    """Per-year trends of the headline numbers (None with < 3 years)."""
+    r = lambda x, nd=2: None if x is None else round(float(x), nd)  # noqa: E731
+    return {
+        "open_water_post_monsoon_ha": r(trend_ha_per_year(summary, "post_monsoon_median_open_ha")),
+        "open_water_pre_monsoon_low_ha": r(trend_ha_per_year(summary, "pre_monsoon_low_ha")),
+        "lake_extent_post_monsoon_ha": r(trend_ha_per_year(summary, "post_monsoon_extent_median_ha")),
+        "vegetated_share_post_monsoon": r(trend_ha_per_year(summary, "post_monsoon_vegetated_share"), 4),
+    }
 
 
 def trend_ha_per_year(summary: pd.DataFrame, column: str) -> float | None:
