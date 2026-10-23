@@ -64,6 +64,7 @@ def load_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
         resolution=DATA.resolution_m,
         groupby="solar_day",
         chunks={},
+        patch_url=planetary_computer.sign,
     )
     baselines = {}
     for it in items:
@@ -91,6 +92,9 @@ def load_jrc_occurrence(aoi: AOI, like: xr.Dataset) -> "np.ndarray":
     items = list(catalog.search(collections=[JRC_COLLECTION], bbox=aoi.bbox).items())
     if not items:
         raise RuntimeError("No JRC Global Surface Water tile covers this AOI.")
-    jrc = odc_load(items[:1], bands=["occurrence"], geobox=like.odc.geobox, resampling="nearest")
+    jrc = odc_load(
+        items[:1], bands=["occurrence"], geobox=like.odc.geobox, resampling="nearest",
+        patch_url=planetary_computer.sign,
+    )
     occ = jrc["occurrence"].isel(time=0).values if "time" in jrc.dims else jrc["occurrence"].values
     return np.asarray(occ)
