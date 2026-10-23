@@ -102,11 +102,24 @@ def search_s1(aoi, start, end):
 
 def iter_vv_db(items, grid):
     """Yield (day, VV dB on our grid) one acquisition day at a time, so a
-    whole city over many monsoons never sits in memory at once."""
+    whole city over many monsoons never sits in memory at once.
+
+    The load is built per day rather than once for every day, because a
+    multi-year monsoon run takes far longer than an asset token stays valid.
+    """
     import planetary_computer
     from odc.stac import load as odc_load
 
-    ds = odc_load(items, bands=["vv"], geobox=grid.to_geobox(), groupby="solar_day",
-                  resampling="bilinear", chunks={}, patch_url=planetary_computer.sign)
-    for i, day in enumerate(ds.time.to_index()):
-        yield day, to_db(ds["vv"].isel(time=i).values)
+    from ..data.stac import refresh_asset_tokens
+
+    by_day: dict = {}
+    for it in items:
+        by_day.setdefault(it.datetime.date(), []).append(it)
+
+    geobox = grid.to_geobox()
+    for day in sorted(by_day):
+        refresh_asset_tokens()
+        ds = odc_load(by_day[day], bands=["vv"], geobox=geobox, groupby="solar_day",
+                      resampling="bilinear", chunks={}, patch_url=planetary_computer.sign)
+        for i, t in enumerate(ds.time.to_index()):
+            yield t, to_db(ds["vv"].isel(time=i).values)

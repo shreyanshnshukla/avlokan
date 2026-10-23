@@ -77,15 +77,20 @@ def load_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
     return ds.assign_coords(processing_baseline=("time", pb))
 
 
-def fresh_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
-    """`load_stack` with brand-new asset tokens.
+def refresh_asset_tokens() -> None:
+    """Drop cached SAS tokens so the next `sign` mints a full-life one.
 
-    Planetary Computer's SAS tokens live ~45 minutes and its cache only
-    replaces one with under a minute left, which is not enough to finish a
-    read that takes several minutes. Emptying the cache first mints a
-    full-life token, so a long job can re-load between reads and stay valid.
+    Planetary Computer's tokens live ~45 minutes and its cache only replaces
+    one with under a minute left, which is not enough to finish a read that
+    takes several minutes. Call this before re-building a load, so a job that
+    runs longer than one token keeps reading with a valid one.
     """
     planetary_computer.sas.TOKEN_CACHE.clear()
+
+
+def fresh_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
+    """`load_stack` with brand-new asset tokens."""
+    refresh_asset_tokens()
     return load_stack(items, aoi, bands=bands)
 
 
