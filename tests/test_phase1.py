@@ -158,3 +158,38 @@ def test_jrc_boundary_thresholds_and_nodata():
 def _disk(size, r):
     yy, xx = np.mgrid[:size, :size]
     return np.hypot(yy - size / 2, xx - size / 2) < r
+
+
+def test_lake_method_catches_dark_water_without_flooding_land():
+    from avlokan.processing.water import lake_water_mask
+    rng = np.random.default_rng(1)
+    size = 100
+    yy, xx = np.mgrid[:size, :size]
+    lake = np.hypot(yy - 50, xx - 50) < 30
+    dark = lake & (xx > 50)                       # dark basin: MNDWI just below 0
+    idx = np.where(lake, 0.3, -0.35) + rng.normal(0, 0.03, (size, size))
+    idx[dark] = -0.08 + rng.normal(0, 0.02, dark.sum())
+    idx[~lake & (xx < 20)] = -0.12                # dull land strip, also just below 0
+    clear = np.ones_like(lake)
+    scl = np.where(lake, 6, 4)
+    scl[dark] = 2                                 # classifier unsure about the dark basin
+    fixed = idx > 0
+    m, t = lake_water_mask(idx, scl, clear, lake)
+    assert (m & dark).sum() > 0.95 * dark.sum()   # dark basin recovered
+    assert (fixed & dark).sum() < 0.05 * dark.sum()
+    assert not (m & ~lake).any()                  # land outside the lake untouched
+    assert t == -0.15
+
+
+def test_lake_method_never_counts_weeds_as_water():
+    from avlokan.processing.water import lake_water_mask
+    lake = np.ones((10, 10), bool)
+    idx = np.full((10, 10), -0.1)                 # would pass the -0.15 lake threshold...
+    nd = np.full((10, 10), 0.7)                   # ...but it's dense vegetation
+    m, _ = lake_water_mask(idx, np.full((10, 10), 6), lake, lake, ndvi=nd)
+    assert not m.any()
+
+
+def test_lake_method_needs_boundary():
+    with pytest.raises(ValueError):
+        water_timeseries(synthetic_stack(start="2019-10-01", end="2019-10-20"), method="lake")

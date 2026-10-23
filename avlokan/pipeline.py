@@ -57,7 +57,8 @@ def run_from_stack(
     if pair:
         times = stack.time.to_index().normalize()
         scenes = [stack.isel(time=int(times.get_loc(d))) for d in pair]
-        res = [scene_water(s, index=index, method=method, threshold=threshold) for s in scenes]
+        res = [scene_water(s, index=index, method=method, threshold=threshold, boundary=binfo["mask"])
+               for s in scenes]
         plot_before_after(scenes[0], scenes[1], res[0]["mask"], res[1]["mask"],
                           f"{aoi.name}: then vs now", out / "before_after.png",
                           veg_before=res[0]["veg"], veg_after=res[1]["veg"], boundary=binfo["mask"])
@@ -116,4 +117,7 @@ def run_lake(aoi: AOI, start: str, end: str, out_dir: str | Path = "outputs",
         except Exception as e:  # network, missing tile, API change: don't lose the run
             print(f"JRC boundary unavailable ({type(e).__name__}: {e}); using this run's history instead.")
             note = "JRC unavailable; fell back"
+    if kwargs.get("method") == "lake" and boundary is None:
+        print("method 'lake' needs the JRC boundary, which isn't available; using 'fixed' instead.")
+        kwargs["method"] = "fixed"
     return run_from_stack(aoi, stack, out_dir, lake_boundary=boundary, boundary_note=note, **kwargs)

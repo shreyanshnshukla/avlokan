@@ -88,9 +88,16 @@ python scripts/run_water_timeseries.py --lake sirpur --start 2023-01-01
 python scripts/run_water_timeseries.py --lake all
 ```
 
-Options: `--index mndwi|ndwi`, `--method fixed|otsu`, `--threshold 0.0`,
+Options: `--index mndwi|ndwi`, `--method fixed|otsu|lake`, `--threshold 0.0`,
 `--start`, `--end`, `--out`, `--no-jrc` (build the boundary from the run's own
 history instead).
+
+**`--method lake`** (experimental, needs the JRC boundary): strict 0.0 threshold
+outside the lake; inside it, a pixel is water if its index is above -0.15 or
+the satellite's own classifier calls it water, and never if it's vegetation.
+Built for dark, algae-rich water like Sirpur's, which sits just under 0.0.
+Wet mud at the edge of a drying lake may be counted as water.
+Avoid `--method otsu` on lakes in cities: it can count land as water.
 
 Diagnose a single date (why was water missed or over-counted?):
 

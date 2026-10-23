@@ -17,7 +17,9 @@ extend it.
 - [x] Outlier filter (haze / missed shadows)
 - [x] Lake composition: open water / vegetation / bare inside a JRC boundary
 - [x] Per-date diagnostic tool
-- [ ] Fix the dark-water miss (cause to be confirmed with the diagnostic)
+- [x] Diagnose the dark-water miss (Sirpur 2023-10-06): index just under 0.0 inside the lake;
+      whole-scene Otsu over-counts land, so not a fix
+- [ ] Compare `--method lake` vs `fixed` on full history; pick the default
 - [x] Sirpur box verified; [ ] other lakes
 - [ ] Alert when a lake is below its normal size for the season
 - [ ] Validate against known figures (Ramsar/municipal records)

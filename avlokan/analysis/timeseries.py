@@ -9,7 +9,7 @@ import xarray as xr
 from ..config import DATA
 from ..processing.indices import mndwi, ndwi, to_reflectance
 from ..processing.lake import VEG_NDVI, boundary_from_history, composition, ndvi
-from ..processing.water import area_hectares, clear_mask, water_mask
+from ..processing.water import area_hectares, clear_mask, lake_water_mask, water_mask
 
 # Indore's seasons: lakes fill during the monsoon (Jun-Sep), peak just after
 # it, and are lowest before the next one. Comparing the same season across
@@ -32,8 +32,13 @@ def season_of(month: int) -> str:
     raise ValueError(month)
 
 
-def scene_water(scene: xr.Dataset, index: str = "mndwi", method: str = "fixed", threshold: float = 0.0) -> dict:
-    """Water mask, vegetation mask and stats for a single time step."""
+def scene_water(scene: xr.Dataset, index: str = "mndwi", method: str = "fixed", threshold: float = 0.0,
+                boundary: np.ndarray | None = None) -> dict:
+    """Water mask, vegetation mask and stats for a single time step.
+
+    method: "fixed" (index > threshold), "otsu" (whole-scene adaptive), or
+    "lake" (strict outside the lake boundary, looser inside; needs boundary).
+    """
     pb = float(scene["processing_baseline"].item()) if "processing_baseline" in scene.coords else None
     green = to_reflectance(scene["B03"].values, pb)
     if index == "mndwi":
@@ -42,9 +47,16 @@ def scene_water(scene: xr.Dataset, index: str = "mndwi", method: str = "fixed", 
         idx = ndwi(green, to_reflectance(scene["B08"].values, pb))
     else:
         raise ValueError(index)
-    clear = clear_mask(scene["SCL"].values)
-    mask, t = water_mask(idx, clear, method=method, threshold=threshold)
-    veg = (ndvi(to_reflectance(scene["B04"].values, pb), to_reflectance(scene["B08"].values, pb)) > VEG_NDVI) & clear
+    scl = scene["SCL"].values
+    clear = clear_mask(scl)
+    nd = ndvi(to_reflectance(scene["B04"].values, pb), to_reflectance(scene["B08"].values, pb))
+    if method == "lake":
+        if boundary is None:
+            raise ValueError("method 'lake' needs a lake boundary (JRC)")
+        mask, t = lake_water_mask(idx, scl, clear, boundary, base_threshold=threshold, ndvi=nd, veg_ndvi=VEG_NDVI)
+    else:
+        mask, t = water_mask(idx, clear, method=method, threshold=threshold)
+    veg = (nd > VEG_NDVI) & clear
     return {
         "mask": mask,
         "veg": veg,
@@ -126,10 +138,13 @@ def water_timeseries(
     With return_boundary=True returns (table, info) where info has the
     boundary mask (2-D), its source ("provided"/"history") and area in ha.
     """
+    if method == "lake" and lake_boundary is None:
+        raise ValueError("method 'lake' needs lake_boundary (from JRC)")
+    b2d = np.asarray(lake_boundary, dtype=bool) if lake_boundary is not None else None
     meta, water_bits, clear_bits, veg_bits = [], [], [], []
     shape = None
     for i, t in enumerate(stack.time.to_index()):
-        res = scene_water(stack.isel(time=i), index=index, method=method, threshold=threshold)
+        res = scene_water(stack.isel(time=i), index=index, method=method, threshold=threshold, boundary=b2d)
         shape = res["mask"].shape
         water_bits.append(np.packbits(res["mask"]))  # 8x smaller in memory
         clear_bits.append(np.packbits(res["clear"]))

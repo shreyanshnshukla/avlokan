@@ -66,6 +66,40 @@ def water_mask(
     return (idx > t) & valid, t
 
 
+def lake_water_mask(
+    index: np.ndarray,
+    scl: np.ndarray,
+    clear: np.ndarray,
+    boundary: np.ndarray,
+    base_threshold: float = 0.0,
+    lake_threshold: float = -0.15,
+    ndvi: np.ndarray | None = None,
+    veg_ndvi: float = 0.4,
+) -> tuple[np.ndarray, float]:
+    """Water mask that is strict outside the lake and looser inside it.
+
+    Why: dark, algae-rich lake water can sit just below index 0.0 (Sirpur,
+    Oct 2023: median MNDWI -0.10 inside the lake), but lowering the threshold
+    everywhere turns roads and fields into "water". Inside the known lake
+    boundary we can be looser because the land question is already settled.
+
+    Inside the boundary a pixel is water if it is not vegetation
+    (NDVI <= veg_ndvi, so floating weeds never count) and either:
+      - its index is above `lake_threshold` (-0.15), or
+      - the satellite's own classifier (SCL) labels it water.
+    Outside the boundary the strict `base_threshold` applies.
+    Returns (mask, lake_threshold).
+    """
+    idx = np.asarray(index, dtype="float32")
+    valid = np.isfinite(idx) & clear
+    inside = np.asarray(boundary, bool) & valid
+    if ndvi is not None:
+        inside &= ~(np.asarray(ndvi) > veg_ndvi)
+    base = (idx > base_threshold) & valid
+    lake = inside & ((idx > lake_threshold) | (np.asarray(scl) == 6))
+    return base | lake, float(lake_threshold)
+
+
 def area_hectares(mask: np.ndarray, pixel_size_m: float = 10.0) -> float:
     """Pixel count x pixel area, in hectares (1 ha = 10,000 m²)."""
     return float(np.count_nonzero(mask)) * pixel_size_m**2 / 10_000.0

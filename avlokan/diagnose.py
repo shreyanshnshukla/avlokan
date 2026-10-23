@@ -40,6 +40,8 @@ def diagnose_scene(scene: xr.Dataset, boundary: np.ndarray | None, out_png: str 
     fixed = scene_water(scene, index="mndwi", method="fixed", threshold=0.0)
     otsu = scene_water(scene, index="mndwi", method="otsu")
     ndwi_fixed = scene_water(scene, index="ndwi", method="fixed", threshold=0.0)
+    has_b = boundary is not None and boundary.any()
+    lake = scene_water(scene, index="mndwi", method="lake", boundary=boundary) if has_b else None
     scl = scene["SCL"].values.astype(int)
 
     # MNDWI without the cloud mask: what the index says even where SCL masked
@@ -59,12 +61,21 @@ def diagnose_scene(scene: xr.Dataset, boundary: np.ndarray | None, out_png: str 
         "masked_by_scl_ha": round(float(masked_by_scl.sum()) * px_ha, 2),
         "masked_by_scl_but_mndwi_says_water_ha": round(float(wet_but_masked.sum()) * px_ha, 2),
         "mndwi_percentiles_in_region": {p: round(float(np.percentile(v, p)), 3) for p in (5, 25, 50, 75, 95)} if v.size else {},
-        "water_ha": {
+        "scl_says_water_in_region_ha": round(float((region & (scl == 6)).sum()) * px_ha, 2),
+        "water_ha_whole_box": {
             "mndwi_fixed_0": round(fixed["water_ha"], 2),
             "mndwi_otsu": round(otsu["water_ha"], 2),
             "ndwi_fixed_0": round(ndwi_fixed["water_ha"], 2),
+            **({"mndwi_lake": round(lake["water_ha"], 2)} if lake else {}),
+        },
+        "water_ha_inside_lake": {
+            "mndwi_fixed_0": round(float((fixed["mask"] & region).sum()) * px_ha, 2),
+            "mndwi_otsu": round(float((otsu["mask"] & region).sum()) * px_ha, 2),
+            "ndwi_fixed_0": round(float((ndwi_fixed["mask"] & region).sum()) * px_ha, 2),
+            **({"mndwi_lake": round(float((lake["mask"] & region).sum()) * px_ha, 2)} if lake else {}),
         },
         "otsu_threshold": round(otsu["threshold"], 3),
+        **({"lake_threshold": round(lake["threshold"], 3)} if lake else {}),
     }
 
     fig, ax = plt.subplots(2, 3, figsize=(15, 9.5))
@@ -73,8 +84,9 @@ def diagnose_scene(scene: xr.Dataset, boundary: np.ndarray | None, out_png: str 
     ax[0, 1].set_title("Satellite's own classification (SCL)\nbrown = cloud shadow, grey = dark area, blue = water")
     im = ax[0, 2].imshow(raw_mndwi, cmap="RdBu", vmin=-0.6, vmax=0.6)
     ax[0, 2].set_title("MNDWI (blue > 0 = water)"); fig.colorbar(im, ax=ax[0, 2], fraction=0.046)
+    third = (lake, f"Lake method (inside lake > {lake['threshold']:.2f})") if lake else (ndwi_fixed, "NDWI fixed 0.0")
     for a, (res, name) in zip(ax[1], ((fixed, "MNDWI fixed 0.0"), (otsu, f"MNDWI Otsu {otsu['threshold']:.2f}"),
-                                      (ndwi_fixed, "NDWI fixed 0.0"))):
+                                      third)):
         o = rgb(scene) * 0.5
         o[res["mask"]] = [0.12, 0.45, 0.85]
         o[region & ~res["clear"]] = [0.85, 0.3, 0.3]
@@ -94,12 +106,28 @@ def diagnose_scene(scene: xr.Dataset, boundary: np.ndarray | None, out_png: str 
 
 
 def _verdict(s: dict) -> str:
-    w = s["water_ha"]
+    """Judge on what's inside the lake, and reject any method that finds more
+    water in the box than the lake outline can hold (it's counting land)."""
+    w = s["water_ha_inside_lake"]
+    box = s["water_ha_whole_box"]
+    cap = s["region_ha"] if s["region"] == "lake boundary" else float("inf")
+    fixed = max(w["mndwi_fixed_0"], 0.1)
+    notes = []
+    if box["mndwi_otsu"] > 1.1 * cap:
+        notes.append(f"Otsu finds {box['mndwi_otsu']} ha in the box but the lake holds at most {cap} ha: "
+                     "it's counting land, don't use it here.")
     if s["masked_by_scl_but_mndwi_says_water_ha"] > 2:
-        return ("A: SCL masked water as shadow/dark area. Fix: trust the water index inside the "
-                "lake boundary even where SCL says shadow/dark area.")
-    if w["mndwi_otsu"] > 1.25 * max(w["mndwi_fixed_0"], 0.1):
-        return "B: water index just under the fixed threshold. Fix: use --method otsu or a lower threshold."
-    if w["ndwi_fixed_0"] > 1.25 * max(w["mndwi_fixed_0"], 0.1):
-        return "B: MNDWI misses it but NDWI sees it. Fix: try --index ndwi for this lake."
-    return "C: no index sees much water here. Likely haze/sensor issue; this date should probably be excluded."
+        cause = ("A: SCL masked water as shadow/dark area. Fix: trust the water index inside the "
+                 "lake boundary even where SCL says shadow/dark area.")
+    elif s["scl_says_water_in_region_ha"] > 1.25 * fixed or w.get("mndwi_lake", 0) > 1.25 * fixed:
+        cause = (f"B: dark lake water sits just under the 0.0 threshold. Fixed finds {w['mndwi_fixed_0']} ha in the "
+                 f"lake, the satellite's classifier says {s['scl_says_water_in_region_ha']} ha"
+                 + (f", lake method finds {w['mndwi_lake']} ha" if "mndwi_lake" in w else "")
+                 + ". Fix: --method lake (looser only inside the lake).")
+    elif w["ndwi_fixed_0"] > 1.25 * fixed:
+        cause = "B: MNDWI misses it but NDWI sees it. Fix: try --index ndwi for this lake."
+    elif s["scl_says_water_in_region_ha"] <= 1.1 * fixed and w.get("mndwi_lake", fixed) <= 1.1 * fixed:
+        cause = "OK: the fixed threshold already finds what the other methods and the satellite's classifier find."
+    else:
+        cause = "C: no index sees much water here. Likely haze/sensor issue; this date should probably be excluded."
+    return " ".join([cause] + notes)
