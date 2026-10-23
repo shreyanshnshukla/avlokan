@@ -2,6 +2,8 @@
 
 Builds a circular "lake" that fills each monsoon and shrinks a little every
 year, with random clouds, so the full pipeline can run without internet.
+Optionally a band of floating weeds covers the lake's western side: it's
+lake, but spectrally it's vegetation, like hyacinth on Sirpur.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ def synthetic_stack(
     base_radius_px: float = 35.0,
     shrink_per_year: float = 0.04,
     cloud_prob: float = 0.25,
+    weeds: bool = False,
     seed: int = 7,
 ) -> xr.Dataset:
     rng = np.random.default_rng(seed)
@@ -34,7 +37,9 @@ def synthetic_stack(
         years = (t - times[0]).days / 365.25
         seasonal = 0.85 + 0.15 * np.cos(2 * np.pi * (t.day_of_year - 290) / 365.25)  # peak ~mid-Oct
         r = base_radius_px * seasonal * (1 - shrink_per_year) ** years
-        water = dist < r
+        lake = dist < r
+        weed = lake & (xx < size / 2 - 0.3 * r) if weeds else np.zeros_like(lake)
+        water = lake & ~weed
 
         pb = 4.0 if t >= pd.Timestamp("2022-01-25") else 2.0
         baselines.append(pb)
@@ -42,10 +47,14 @@ def synthetic_stack(
         noise = lambda: rng.normal(0, 60, (size, size))  # noqa: E731
 
         # Reflectance x 10,000. Water: green > NIR, SWIR. Land: the reverse.
-        means = {"B02": (600, 900), "B03": (800, 1000), "B04": (500, 1200), "B08": (300, 2600), "B11": (150, 2200)}
-        for b, (w, land) in means.items():
+        # Weeds: bright NIR (NDVI ~0.65), SWIR > green (MNDWI < 0).
+        # Land is urban/bare like Indore's surroundings (NDVI ~0.15).
+        means = {"B02": (600, 900, 500), "B03": (800, 1000, 900), "B04": (500, 1500, 600),
+                 "B08": (300, 2000, 3000), "B11": (150, 2200, 1500)}
+        for b, (w, land, wd) in means.items():
+            base = np.where(water, w, np.where(weed, wd, land))
             # clip before casting so negative noise can't wrap around in uint16
-            data[b][i] = np.clip(np.where(water, w, land) + noise() + off, 1, 65535)
+            data[b][i] = np.clip(base + noise() + off, 1, 65535)
 
         s = np.where(water, 6, 4).astype("uint8")
         if rng.random() < cloud_prob:

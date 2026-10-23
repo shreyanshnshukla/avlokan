@@ -27,8 +27,13 @@ For each lake, Avlokan:
 4. Detects water with MNDWI (fixed or Otsu threshold).
 5. Rejects dates where clouds cover part of the lake itself (a small cloud
    over water would otherwise look like the lake shrinking).
-6. Compares like with like: post-monsoon peaks and pre-monsoon lows per year,
-   plus a trend in hectares/year.
+6. Rejects outliers: single dates that jump far from their neighbours
+   (thin haze or cloud shadows the satellite's own mask missed).
+7. Splits the lake into **open water, vegetation (weeds) and bare ground**
+   inside a fixed lake boundary from JRC Global Surface Water (40 years of
+   records). Open water alone can't tell a shrinking lake from a weedy one.
+8. Compares like with like: post-monsoon peaks and pre-monsoon lows per year,
+   plus trends in hectares/year.
 
 Lakes configured: Sirpur, Bilawali, Yeshwant Sagar, Pipliyapala
 ([avlokan/config.py](avlokan/config.py)).
@@ -37,11 +42,19 @@ Lakes configured: Sirpur, Bilawali, Yeshwant Sagar, Pipliyapala
 
 | File | What it is |
 |---|---|
-| `water_timeseries.csv` | Every date: water area (ha), cloud-free share, usable or not |
-| `yearly_summary.csv` | Post-monsoon peak and pre-monsoon low per year |
-| `water_timeseries.png` | The chart |
-| `before_after.png` | Earliest vs latest post-monsoon image, with detected water |
+| `water_timeseries.csv` | Every date: open water, vegetated, bare, lake extent (ha), cloud-free share, outlier, usable |
+| `yearly_summary.csv` | Per year: open-water peak/low, post-monsoon lake extent, weed share |
+| `water_timeseries.png` | Open water over time (removed outliers shown as red x) |
+| `lake_composition.png` | Monthly: open water vs vegetation vs bare ground inside the lake |
+| `before_after.png` | Earliest vs latest post-monsoon image: water (blue), weeds (green), boundary (yellow) |
 | `report.json` | Trends and run metadata |
+
+### Reading the numbers
+
+- **Lake extent falling** (post-monsoon) → the lake is actually shrinking.
+- **Open water falling, extent steady** → it's getting weedier, not smaller.
+- **Extent is only reported post-monsoon.** In summer, grass on the dry bed
+  looks like weeds from space.
 
 ---
 
@@ -76,7 +89,17 @@ python scripts/run_water_timeseries.py --lake all
 ```
 
 Options: `--index mndwi|ndwi`, `--method fixed|otsu`, `--threshold 0.0`,
-`--start`, `--end`, `--out`.
+`--start`, `--end`, `--out`, `--no-jrc` (build the boundary from the run's own
+history instead).
+
+Diagnose a single date (why was water missed or over-counted?):
+
+```bash
+python scripts/diagnose_date.py --lake sirpur --date 2023-10-06
+```
+
+It compares the satellite's own cloud/shadow labels, two water indices and
+two thresholds, and prints the likely cause.
 
 Or open the walkthrough notebook:
 [notebooks/01_water_bodies_indore.ipynb](notebooks/01_water_bodies_indore.ipynb).
@@ -101,8 +124,8 @@ docs/ROADMAP.md        all phases
 
 ## Caveats
 
-- Lake boxes are from public sources and not yet checked on a map;
-  Pipliyapala's centre is approximate. `report.json` says `bbox_verified: false`
+- Sirpur's box is verified. The other lake boxes are from public sources and
+  not yet checked; Pipliyapala's centre is approximate. `report.json` says `bbox_verified: false`
   until you flip `verified=True` in `config.py`.
 - Sentinel-2 is 10 m per pixel: good for lakes and colonies, not single
   buildings.

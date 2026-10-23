@@ -13,7 +13,12 @@ extend it.
 ## Phase 1 — Water bodies  ← current
 - [x] Water detection (MNDWI, fixed/Otsu), lake-aware cloud filtering
 - [x] Area time series, seasonal peaks/lows, trend per year, before/after maps
-- [ ] Verify lake boxes on a map; replace boxes with real lake outlines
+- [x] First real run (Sirpur, 2023-2026): 158 scenes, pipeline works end to end
+- [x] Outlier filter (haze / missed shadows)
+- [x] Lake composition: open water / vegetation / bare inside a JRC boundary
+- [x] Per-date diagnostic tool
+- [ ] Fix the dark-water miss (cause to be confirmed with the diagnostic)
+- [x] Sirpur box verified; [ ] other lakes
 - [ ] Alert when a lake is below its normal size for the season
 - [ ] Validate against known figures (Ramsar/municipal records)
 

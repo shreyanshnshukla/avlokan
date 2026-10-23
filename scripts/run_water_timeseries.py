@@ -29,6 +29,8 @@ def main() -> int:
     p.add_argument("--method", choices=["fixed", "otsu"], default="fixed")
     p.add_argument("--threshold", type=float, default=0.0)
     p.add_argument("--out", default="outputs")
+    p.add_argument("--no-jrc", action="store_true",
+                   help="don't use the JRC lake boundary; build it from this run's own history")
     p.add_argument("--show-bbox", action="store_true", help="print the AOI box as GeoJSON and exit")
     a = p.parse_args()
 
@@ -48,7 +50,8 @@ def main() -> int:
     from avlokan.pipeline import run_lake
 
     for k in keys:
-        report = run_lake(LAKES[k], a.start, a.end, a.out, index=a.index, method=a.method, threshold=a.threshold)
+        report = run_lake(LAKES[k], a.start, a.end, a.out, use_jrc=not a.no_jrc,
+                          index=a.index, method=a.method, threshold=a.threshold)
         print(json.dumps(report, indent=2))
         if not LAKES[k].verified:
             print(f"Note: the {LAKES[k].name} bbox hasn't been verified on a map yet (see avlokan/config.py).")

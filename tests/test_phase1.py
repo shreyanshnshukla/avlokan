@@ -3,11 +3,16 @@ import json
 import numpy as np
 import pytest
 
-from avlokan.analysis.timeseries import season_of, trend_ha_per_year, water_timeseries, yearly_summary
+import pandas as pd
+
+from avlokan.analysis.timeseries import (
+    flag_outliers, season_of, trend_ha_per_year, water_timeseries, yearly_summary,
+)
 from avlokan.config import LAKES
 from avlokan.data.synthetic import synthetic_stack
 from avlokan.pipeline import run_from_stack
 from avlokan.processing.indices import mndwi, ndwi, to_reflectance
+from avlokan.processing.lake import boundary_from_jrc
 from avlokan.processing.water import area_hectares, clear_mask, otsu_threshold, water_mask
 
 
@@ -91,13 +96,65 @@ def test_no_fake_jump_across_2022_baseline_change():
 def test_end_to_end_outputs(tmp_path):
     report = run_from_stack(LAKES["sirpur"], synthetic_stack(), tmp_path)
     out = tmp_path / "sirpur"
-    for f in ("water_timeseries.csv", "yearly_summary.csv", "water_timeseries.png", "before_after.png", "report.json"):
+    for f in ("water_timeseries.csv", "yearly_summary.csv", "water_timeseries.png", "lake_composition.png",
+              "before_after.png", "report.json"):
         assert (out / f).exists(), f
     assert json.loads((out / "report.json").read_text())["scenes_usable"] == report["scenes_usable"]
-    assert report["trend_post_monsoon_ha_per_year"] < 0
+    assert report["trends_per_year"]["open_water_post_monsoon_ha"] < 0
+    assert report["lake_boundary_source"] == "history"
 
 
 def test_lake_bboxes_are_sane():
     for aoi in LAKES.values():
         x0, y0, x1, y1 = aoi.bbox
         assert 75.5 < x0 < x1 < 76.1 and 22.5 < y0 < y1 < 23.0, aoi.key
+
+
+def _ts(values, start="2024-01-01", every=5):
+    dates = pd.date_range(start, periods=len(values), freq=f"{every}D")
+    return pd.DataFrame({"date": dates, "water_ha": values, "usable": True})
+
+
+def test_outlier_filter_removes_spikes_and_drops_only():
+    vals = [60, 61, 59, 62, 140, 60, 58, 61, 2, 60, 59, 62]
+    ts = flag_outliers(_ts(vals))
+    assert ts.loc[ts["outlier"], "water_ha"].tolist() == [140, 2]
+    assert ts["usable"].sum() == len(vals) - 2
+
+
+def test_outlier_filter_keeps_real_seasonal_change():
+    # steady fall from 80 to 20 over ~4 months is drawdown, not noise
+    vals = list(np.linspace(80, 20, 25))
+    assert not flag_outliers(_ts(vals))["outlier"].any()
+
+
+def test_outlier_filter_ignores_isolated_dates():
+    ts = flag_outliers(_ts([60, 140], every=90))  # no neighbours within 30 days
+    assert not ts["outlier"].any()
+
+
+def test_weeds_count_as_lake_not_water():
+    stack = synthetic_stack(start="2019-10-01", end="2019-11-30", cloud_prob=0.0, shrink_per_year=0.0, weeds=True)
+    ts, info = water_timeseries(stack, return_boundary=True,
+                                lake_boundary=_disk(120, 35.0))  # full lake outline, like JRC would give
+    row = ts[ts["usable"]].iloc[0]
+    assert row["vegetated_ha"] > 0.15 * row["lake_extent_ha"]          # weeds detected inside the lake
+    assert row["open_water_ha"] < row["lake_extent_ha"]                 # open water alone undercounts
+    assert row["lake_extent_ha"] == pytest.approx(row["open_water_ha"] + row["vegetated_ha"])
+    assert info["source"] == "provided"
+
+
+def test_history_boundary_used_when_none_given():
+    ts, info = water_timeseries(synthetic_stack(start="2019-01-01", end="2019-12-31"), return_boundary=True)
+    assert info["source"] == "history" and info["boundary_ha"] > 0
+    assert (ts["lake_extent_ha"] >= ts["open_water_ha"] - 1e-9).all()
+
+
+def test_jrc_boundary_thresholds_and_nodata():
+    occ = np.array([0, 3, 5, 60, 100, 255])
+    assert boundary_from_jrc(occ).tolist() == [False, False, True, True, True, False]
+
+
+def _disk(size, r):
+    yy, xx = np.mgrid[:size, :size]
+    return np.hypot(yy - size / 2, xx - size / 2) < r

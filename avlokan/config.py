@@ -48,7 +48,8 @@ LAKES: dict[str, AOI] = {
         lat=22.7006,
         lon=75.8128,
         pad_deg=0.015,
-        notes="Ramsar wetland in west Indore.",
+        notes="Ramsar wetland in west Indore. Box checked against the first real run (Oct 2026).",
+        verified=True,
         tags=("lake", "ramsar"),
     ),
     "bilawali": AOI(

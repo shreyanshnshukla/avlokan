@@ -73,3 +73,24 @@ def load_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
             baselines[it.datetime.date()] = 0.0
     pb = [baselines.get(t.date(), 0.0) for t in ds.time.to_index()]
     return ds.assign_coords(processing_baseline=("time", pb))
+
+
+JRC_COLLECTION = "jrc-gsw"
+
+
+def load_jrc_occurrence(aoi: AOI, like: xr.Dataset) -> "np.ndarray":
+    """JRC Global Surface Water occurrence (% of months with water since
+    1984), resampled onto the exact grid of `like` (our Sentinel-2 stack).
+
+    It's 30 m data, so lake edges are a little blocky at our 10 m grid;
+    fine for a boundary, not for edge-level detail.
+    """
+    import numpy as np
+
+    catalog = open_catalog()
+    items = list(catalog.search(collections=[JRC_COLLECTION], bbox=aoi.bbox).items())
+    if not items:
+        raise RuntimeError("No JRC Global Surface Water tile covers this AOI.")
+    jrc = odc_load(items[:1], bands=["occurrence"], geobox=like.odc.geobox, resampling="nearest")
+    occ = jrc["occurrence"].isel(time=0).values if "time" in jrc.dims else jrc["occurrence"].values
+    return np.asarray(occ)
