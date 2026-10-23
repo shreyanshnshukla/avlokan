@@ -112,6 +112,47 @@ Or open the walkthrough notebook:
 [notebooks/01_water_bodies_indore.ipynb](notebooks/01_water_bodies_indore.ipynb).
 It runs offline on synthetic data first, then on real imagery.
 
+## Phases 2-4 (built, first real runs pending)
+
+All three work on a city grid (Indore, ~24 x 24 km) and share yearly
+cloud-free composites, so build those first.
+
+```bash
+pip install -r requirements.txt            # adds scipy
+python scripts/build_composites.py --area indore --years 2019-2026
+```
+
+**Phase 2: construction detection.** A U-Net learns "what built-up looks
+like" from ESA WorldCover 2021 labels, then maps built-up land for every
+year. New construction must persist a year to count (no flicker).
+
+```bash
+pip install -r requirements-ml.txt         # PyTorch; read the file first (large download)
+python scripts/p2_make_dataset.py --area indore --year 2021
+python scripts/p2_train.py --data data/p2/indore_2021.npz
+python scripts/p2_detect_change.py --area indore --years 2019-2026
+# no GPU / no PyTorch yet? rule-based baseline:
+python scripts/p2_detect_change.py --area indore --years 2019-2026 --method index
+```
+
+**Phase 3: encroachment.** New construction inside restricted zones (every
+water body + buffer, automatically; plus your own zones from `zones/`)
+becomes a flag with location, size, first-seen year and confidence.
+Flags are candidates for review, never findings of illegality.
+
+```bash
+python scripts/p3_flag_encroachment.py --area indore
+```
+
+**Phase 4: floods.** Sentinel-1 radar sees through monsoon clouds. Flood
+history (how often each place flooded, 2019 onwards) plus terrain gives a
+screening risk map with prevention guidance per risk level.
+
+```bash
+python scripts/p4_flood.py --area indore --years 2019-2026
+python scripts/p4_flood.py --area indore --event 2025-08-14   # one event
+```
+
 ## Project layout
 
 ```
@@ -123,7 +164,13 @@ avlokan/
   analysis/            time series, seasonal summary, trends
   viz/                 charts and before/after maps
   pipeline.py          end-to-end run for one lake
-scripts/               command-line entry points
+  geo.py               grid metadata, save/load layers
+  data/composite.py    yearly cloud-free composites (Phases 2-4)
+  construction/        Phase 2: labels, patches, U-Net, training, change
+  encroachment/        Phase 3: zones, flags
+  flood/               Phase 4: radar flood mapping, terrain risk
+scripts/               command-line entry points (p2_*, p3_*, p4_* per phase)
+zones/                 your restricted-zone GeoJSON files (Phase 3)
 notebooks/             walkthroughs
 tests/                 unit + end-to-end tests (offline)
 docs/ROADMAP.md        all phases

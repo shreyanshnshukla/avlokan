@@ -82,6 +82,30 @@ LAKES: dict[str, AOI] = {
 }
 
 
+# City-scale areas for construction, encroachment and flood work (Phases 2-4).
+# Indore: ~24 x 24 km around the centre, covering the urban area and its edge.
+AREAS: dict[str, AOI] = {
+    "indore": AOI(
+        key="indore",
+        name="Indore city",
+        lat=22.7196,
+        lon=75.8577,
+        pad_deg=0.11,
+        notes="City + growth fringe. Check coverage with --show-bbox before long runs.",
+        tags=("city",),
+    ),
+}
+
+
+def get_area(key: str) -> AOI:
+    """Look up a city area or a lake by key."""
+    if key in AREAS:
+        return AREAS[key]
+    if key in LAKES:
+        return LAKES[key]
+    raise KeyError(f"unknown area {key!r}; known: {', '.join(list(AREAS) + list(LAKES))}")
+
+
 @dataclass(frozen=True)
 class DataSettings:
     stac_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1"

@@ -24,20 +24,31 @@ extend it.
 - [ ] Alert when a lake is below its normal size for the season
 - [ ] Validate against known figures (Ramsar/municipal records)
 
+## Shared
+- [x] Yearly cloud-free composites (dry season, median, cloud-masked)
+
 ## Phase 2 — Construction detection (first real ML)
-- [ ] Built-up segmentation with U-Net (labels from ESA WorldCover / Dynamic World)
-- [ ] Train locally (RTX 3050) for experiments, Azure ML for full runs
-- [ ] Change detection: new construction by month/year, growth per ward
+- [x] Labels from ESA WorldCover 2021; spatially split training patches
+- [x] U-Net (sized for RTX 3050), Dice+BCE, early stopping on val IoU
+- [x] Sliding-window inference; rule-based (NDBI) baseline for comparison
+- [x] Change detection with persistence; new construction per year; map
+- [ ] First real training run on Indore; beat the index baseline
+- [ ] Azure ML for larger runs; growth per ward
 
 ## Phase 3 — Encroachment and illegal construction
-- [ ] Restricted zones: lake buffers, riverbanks, green belts, forest land, master-plan zones
-- [ ] Flag new construction inside them ("flagged for review", never "illegal")
+- [x] Water-body zones + buffer from JRC (all lakes, ponds, rivers in the area)
+- [x] Custom zones from GeoJSON (green belts, master-plan zones)
+- [x] Flags: location, size, first-seen year, confidence, "flagged_for_review"; CSV + GeoJSON + map
+- [ ] Real buffer widths from applicable rules; sourced zone boundaries
 - [ ] Remote-area monitoring: forests, hills, river islands
 
 ## Phase 4 — Floods
-- [ ] Live flood mapping with Sentinel-1 radar
-- [ ] Flood risk from elevation, drainage, rainfall history
-- [ ] Construction blocking natural drainage
+- [x] Flood mapping from Sentinel-1 RTC radar (despeckle, threshold, minus permanent water)
+- [x] Flood frequency across monsoons; single-event maps
+- [x] Screening risk: flood history + relative elevation + slope (Copernicus DEM); guidance per level
+- [x] Link to Phase 2: new construction in high-risk areas
+- [ ] First real run; check against known flood events
+- [ ] Rainfall; construction blocking natural drainage
 
 ## Phase 5 — Landslides
 - [ ] Susceptibility maps (slope, soil, vegetation loss, rainfall)

@@ -79,7 +79,16 @@ def load_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
 JRC_COLLECTION = "jrc-gsw"
 
 
-def load_jrc_occurrence(aoi: AOI, like: xr.Dataset) -> "np.ndarray":
+def _geobox(like):
+    """Accept an odc-loaded dataset, a GeoBox, or an avlokan Grid."""
+    if hasattr(like, "odc"):
+        return like.odc.geobox
+    if hasattr(like, "to_geobox"):
+        return like.to_geobox()
+    return like
+
+
+def load_jrc_occurrence(aoi: AOI, like) -> "np.ndarray":
     """JRC Global Surface Water occurrence (% of months with water since
     1984), resampled onto the exact grid of `like` (our Sentinel-2 stack).
 
@@ -93,7 +102,7 @@ def load_jrc_occurrence(aoi: AOI, like: xr.Dataset) -> "np.ndarray":
     if not items:
         raise RuntimeError("No JRC Global Surface Water tile covers this AOI.")
     jrc = odc_load(
-        items[:1], bands=["occurrence"], geobox=like.odc.geobox, resampling="nearest",
+        items[:1], bands=["occurrence"], geobox=_geobox(like), resampling="nearest",
         patch_url=planetary_computer.sign,
     )
     occ = jrc["occurrence"].isel(time=0).values if "time" in jrc.dims else jrc["occurrence"].values

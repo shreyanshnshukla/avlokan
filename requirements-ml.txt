@@ -1,0 +1,11 @@
+# Phase 2 model training (U-Net). Only needed for p2_train / p2_detect_change --method unet.
+#
+# PyTorch with CUDA for an NVIDIA GPU (RTX 3050) is a ~2.5-3 GB download and needs
+# ~5 GB free disk. Get the exact install command for your setup from
+# https://pytorch.org/get-started/locally/ (choose: Stable, Windows, Pip, Python, CUDA).
+# It looks like:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu1XX
+#
+# CPU-only (much smaller, but training will be slow):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.3

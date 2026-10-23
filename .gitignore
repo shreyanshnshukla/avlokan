@@ -16,3 +16,6 @@ data/cache/
 .DS_Store
 Thumbs.db
 .vscode/
+data/p2/
+models/
+outputs_*/
