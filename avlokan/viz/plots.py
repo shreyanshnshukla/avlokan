@@ -21,6 +21,9 @@ SEASON_COLOURS = {
 
 
 def plot_timeseries(ts: pd.DataFrame, title: str, path=None):
+    """Open water inside the lake boundary when available, else the whole box."""
+    if "open_water_ha" in ts and ts["open_water_ha"].notna().any():
+        ts = ts.assign(water_ha=ts["open_water_ha"])
     fig, ax = plt.subplots(figsize=(11, 4.5))
     ok = ts[ts["usable"]]
     for season, grp in ok.groupby("season"):
@@ -34,7 +37,7 @@ def plot_timeseries(ts: pd.DataFrame, title: str, path=None):
         ax.scatter(out["date"], out["water_ha"], s=22, marker="x", color="#b23b3b", alpha=0.6,
                    label="removed (haze/shadow)")
     ax.set_title(title)
-    ax.set_ylabel("Open water (hectares)")
+    ax.set_ylabel("Open water in lake (hectares)")
     ax.grid(alpha=0.25)
     ax.legend(frameon=False, ncol=6, fontsize=9, loc="upper center", bbox_to_anchor=(0.5, -0.08))
     ax.spines[["top", "right"]].set_visible(False)

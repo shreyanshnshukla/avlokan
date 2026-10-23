@@ -19,7 +19,11 @@ extend it.
 - [x] Per-date diagnostic tool
 - [x] Diagnose the dark-water miss (Sirpur 2023-10-06): index just under 0.0 inside the lake;
       whole-scene Otsu over-counts land, so not a fix
-- [ ] Compare `--method lake` vs `fixed` on full history; pick the default
+- [x] Compared `lake` vs `fixed` on 2017-2026: fixed misses dark water in dry months
+      (2023 pre-monsoon low 6.3 vs 25.8 ha). `lake` is now the default.
+- [x] Summaries measured inside the lake boundary, medians instead of maxima
+- [ ] Finding to verify on the ground: open water down, extent flat, vegetation share
+      up to ~55% (2022). Natural marsh vs hyacinth can't be told apart from space.
 - [x] Sirpur box verified; [ ] other lakes
 - [ ] Alert when a lake is below its normal size for the season
 - [ ] Validate against known figures (Ramsar/municipal records)

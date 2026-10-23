@@ -26,8 +26,8 @@ def main() -> int:
     p.add_argument("--start", default="2017-01-01")
     p.add_argument("--end", default=str(date.today()))
     p.add_argument("--index", choices=["mndwi", "ndwi"], default="mndwi")
-    p.add_argument("--method", choices=["fixed", "otsu", "lake"], default="fixed",
-                   help="lake = strict 0.0 outside the lake; inside it, index > -0.15 or classifier says water, never weeds (needs JRC)")
+    p.add_argument("--method", choices=["fixed", "otsu", "lake"], default="lake",
+                   help="lake (default) = strict 0.0 outside the lake; inside it, index > -0.15 or classifier says water, never vegetation. Falls back to fixed without the JRC boundary.")
     p.add_argument("--threshold", type=float, default=0.0)
     p.add_argument("--out", default="outputs")
     p.add_argument("--no-jrc", action="store_true",
