@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date
 
 import planetary_computer
+import planetary_computer.sas
 import pystac_client
 import xarray as xr
 from odc.stac import load as odc_load
@@ -74,6 +75,18 @@ def load_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
             baselines[it.datetime.date()] = 0.0
     pb = [baselines.get(t.date(), 0.0) for t in ds.time.to_index()]
     return ds.assign_coords(processing_baseline=("time", pb))
+
+
+def fresh_stack(items, aoi: AOI, bands=DATA.bands) -> xr.Dataset:
+    """`load_stack` with brand-new asset tokens.
+
+    Planetary Computer's SAS tokens live ~45 minutes and its cache only
+    replaces one with under a minute left, which is not enough to finish a
+    read that takes several minutes. Emptying the cache first mints a
+    full-life token, so a long job can re-load between reads and stay valid.
+    """
+    planetary_computer.sas.TOKEN_CACHE.clear()
+    return load_stack(items, aoi, bands=bands)
 
 
 JRC_COLLECTION = "jrc-gsw"
