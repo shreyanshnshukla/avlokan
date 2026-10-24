@@ -1,7 +1,8 @@
 """Find and load Sentinel-2 imagery from Microsoft Planetary Computer.
 
 No API key needed: the `planetary_computer` package signs asset URLs with
-short-lived anonymous tokens.
+short-lived anonymous tokens. Signing happens at load time, not search
+time -- see `open_catalog`.
 """
 
 from __future__ import annotations
@@ -18,7 +19,11 @@ from ..config import AOI, DATA
 
 
 def open_catalog() -> pystac_client.Client:
-    return pystac_client.Client.open(DATA.stac_url, modifier=planetary_computer.sign_inplace)
+    """Deliberately unsigned: `planetary_computer.sign` leaves a URL alone once
+    it carries a token, so signing here would freeze every asset to one
+    45-minute token and a longer run would die mid-read. Items stay unsigned
+    and every odc.stac load signs them itself via `patch_url`."""
+    return pystac_client.Client.open(DATA.stac_url)
 
 
 def search_scenes(
